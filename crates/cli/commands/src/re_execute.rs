@@ -11,6 +11,7 @@ use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
 use reth_cli::chainspec::ChainSpecParser;
 use reth_consensus::FullConsensus;
 use reth_evm::{execute::Executor, ConfigureEvm};
+use alloy_primitives::{map::HashMap};
 use reth_primitives_traits::{format_gas_throughput, BlockBody, GotExpected};
 use reth_provider::{
     BlockNumReader, BlockReader, ChainSpecProvider, DatabaseProviderFactory, ReceiptProvider,
@@ -19,8 +20,10 @@ use reth_provider::{
 use reth_revm::database::StateProviderDatabase;
 use reth_stages::stages::calculate_gas_used_from_headers;
 use std::{
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
+    fs::File,
+    io::{Read, Write},
 };
 use tokio::{sync::mpsc, task::JoinSet};
 use tracing::*;
@@ -66,6 +69,7 @@ impl<C: ChainSpecParser<ChainSpec: EthChainSpec + Hardforks + EthereumHardforks>
 
         let min_block = self.from;
         let max_block = self.to.unwrap_or(provider.best_block_number()?);
+        println!("best block:{:?}", provider.best_block_number());
 
         let total_blocks = max_block - min_block;
         let total_gas = calculate_gas_used_from_headers(
@@ -85,6 +89,10 @@ impl<C: ChainSpecParser<ChainSpec: EthChainSpec + Hardforks + EthereumHardforks>
 
         let (stats_tx, mut stats_rx) = mpsc::unbounded_channel();
 
+        let input_bals = read_bals_from_file();
+        let input_bals = Arc::new(Mutex::new(input_bals));
+        let bals: Arc<Mutex<std::collections::HashMap<u64, Option<reth_revm::state::bal::Bal>>>> = Arc::new(Mutex::new(HashMap::new()));
+
         let mut tasks = JoinSet::new();
         for i in 0..self.num_tasks {
             let start_block = min_block + i * blocks_per_task;
@@ -97,13 +105,30 @@ impl<C: ChainSpecParser<ChainSpec: EthChainSpec + Hardforks + EthereumHardforks>
             let consensus = components.consensus().clone();
             let db_at = db_at.clone();
             let stats_tx = stats_tx.clone();
+
+            let bal_block = bals.clone();
+            let input_bals_clone = input_bals.clone();
             tasks.spawn_blocking(move || {
-                let mut executor = evm_config.batch_executor(db_at(start_block - 1));
+                // let mut executor = evm_config.batch_executor(db_at(start_block - 1));
+                let mut guard = input_bals_clone.lock().unwrap();
+                let found_bal = guard.remove(&(start_block));
+                 let input_bal = if let Some(bal) = found_bal {
+                    Arc::new(bal.unwrap())
+                } else {
+                    Arc::new(reth_revm::state::bal::Bal::default())
+                };
+
+                let mut executor = evm_config.batch_executor_with_bal(db_at(start_block - 1), input_bal);
                 for block in start_block..end_block {
+                    let bn = block;
                     let block = provider_factory
                         .recovered_block(block.into(), TransactionVariant::NoHash)?
                         .unwrap();
-                    let result = executor.execute_one(&block)?;
+                    let mut result = executor.execute_one(&block)?;
+
+
+                    let mut guard = bal_block.lock().unwrap();
+                    guard.insert(bn, result.bal.take());
 
                     if let Err(err) = consensus
                         .validate_block_post_execution(&block, &result)
@@ -156,7 +181,9 @@ impl<C: ChainSpecParser<ChainSpec: EthChainSpec + Hardforks + EthereumHardforks>
 
                     // Reset DB once in a while to avoid OOM
                     if executor.size_hint() > 1_000_000 {
-                        executor = evm_config.batch_executor(db_at(block.number()));
+                        // executor = evm_config.batch_executor(db_at(block.number()));
+                        let default_bal = reth_revm::state::bal::Bal::default();
+                        executor = evm_config.batch_executor_with_bal(db_at(block.number()), Arc::new(default_bal));
                     }
                 }
 
@@ -210,6 +237,8 @@ impl<C: ChainSpecParser<ChainSpec: EthChainSpec + Hardforks + EthereumHardforks>
             }
         }
 
+        write_to_file(bals);
+
         info!(
             start_block = min_block,
             end_block = max_block,
@@ -219,4 +248,23 @@ impl<C: ChainSpecParser<ChainSpec: EthChainSpec + Hardforks + EthereumHardforks>
 
         Ok(())
     }
+}
+
+
+fn write_to_file(bals: Arc<Mutex<std::collections::HashMap<u64, Option<reth_revm::state::bal::Bal>>>>) {
+    // Serialize to JSON
+    let bals_guard = bals.lock().unwrap();
+    let json = serde_json::to_string_pretty(&*bals_guard).unwrap();
+
+    // Write to file
+    let mut file = File::create("bals.json").ok().unwrap();
+    file.write_all(json.as_bytes()).ok().unwrap();
+}
+
+fn read_bals_from_file() -> HashMap<u64, Option<reth_revm::state::bal::Bal>> {
+    let mut file = File::open("bals.json").ok().unwrap();
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).ok().unwrap();
+
+    serde_json::from_str(&contents).unwrap()
 }

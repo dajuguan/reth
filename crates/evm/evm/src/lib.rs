@@ -18,6 +18,7 @@
 extern crate alloc;
 
 use crate::execute::{BasicBlockBuilder, Executor};
+use revm::state::bal::Bal;
 use ::revm::{context::TxEnv, database::State};
 use alloc::vec::Vec;
 use alloy_eips::{
@@ -31,6 +32,7 @@ use alloy_evm::{
 };
 use alloy_primitives::{Address, B256};
 use core::{error::Error, fmt::Debug};
+use std::sync::Arc;
 use execute::{BasicBlockExecutor, BlockAssembler, BlockBuilder};
 use reth_execution_errors::BlockExecutionError;
 use reth_primitives_traits::{
@@ -452,6 +454,17 @@ pub trait ConfigureEvm: Clone + Debug + Send + Sync + Unpin {
         db: DB,
     ) -> impl Executor<DB, Primitives = Self::Primitives, Error = BlockExecutionError> {
         BasicBlockExecutor::new(self, db)
+    }
+
+        /// Returns a new [`BasicBlockExecutor`].
+    #[auto_impl(keep_default_for(&, Arc))]
+    fn batch_executor_with_bal<DB: Database>(
+        &self,
+        db: DB,
+        bal: Arc<Bal>,
+    ) -> impl Executor<DB, Primitives = Self::Primitives, Error = BlockExecutionError> {
+        println!("read bal: {:?}", bal);
+        BasicBlockExecutor::new_with_bal(self, db, bal)
     }
 }
 

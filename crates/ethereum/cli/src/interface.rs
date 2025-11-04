@@ -9,7 +9,8 @@ use reth_chainspec::{ChainSpec, EthChainSpec, Hardforks};
 use reth_cli::chainspec::ChainSpecParser;
 use reth_cli_commands::{
     common::{CliComponentsBuilder, CliHeader, CliNodeTypes},
-    config_cmd, db, download, dump_genesis, export_era, import, import_era, init_cmd, init_state,
+    config_cmd, db, download, dump, dump_genesis, export_era, import, import_era, init_cmd,
+    init_state,
     launcher::FnLauncher,
     node::{self, NoArgs},
     p2p, prune, re_execute, stage,
@@ -276,6 +277,9 @@ pub enum Commands<C: ChainSpecParser, Ext: clap::Args + fmt::Debug> {
     /// Re-execute blocks in parallel to verify historical sync correctness.
     #[command(name = "re-execute")]
     ReExecute(re_execute::Command<C>),
+    /// Dump blocks.
+    #[command(name = "dump")]
+    Dump(dump::DumpCommand<C>),
 }
 
 impl<C: ChainSpecParser, Ext: clap::Args + fmt::Debug> Commands<C, Ext> {
@@ -298,6 +302,7 @@ impl<C: ChainSpecParser, Ext: clap::Args + fmt::Debug> Commands<C, Ext> {
             Self::Config(_) => None,
             Self::Prune(cmd) => cmd.chain_spec(),
             Self::ReExecute(cmd) => cmd.chain_spec(),
+            Self::Dump(cmd) => cmd.chain_spec(),
         }
     }
 }

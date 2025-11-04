@@ -1,9 +1,11 @@
 //! Traits for execution.
 
+use std::sync::Arc;
+
 use crate::{ConfigureEvm, Database, OnStateHook, TxEnvFor};
 use alloc::{boxed::Box, vec::Vec};
 use alloy_consensus::{BlockHeader, Header};
-use alloy_eips::eip2718::WithEncoded;
+use alloy_eips::{eip2718::WithEncoded, eip7928::BlockAccessList};
 pub use alloy_evm::block::{BlockExecutor, BlockExecutorFactory};
 use alloy_evm::{
     block::{CommitChanges, ExecutableTx},
@@ -24,6 +26,7 @@ use reth_trie_common::{updates::TrieUpdates, HashedPostState};
 use revm::{
     context::result::ExecutionResult,
     database::{states::bundle_state::BundleRetention, BundleState, State},
+    state::bal::Bal,
 };
 
 /// A type that knows how to execute a block. It is assumed to operate on a
@@ -574,6 +577,19 @@ impl<F, DB: Database> BasicBlockExecutor<F, DB> {
         db.bal_builder = Some(revm::state::bal::Bal::new());
         Self { strategy_factory, db }
     }
+
+    pub fn new_with_bal(strategy_factory: F, db: DB, bal: Arc<Bal>) -> Self {
+        let mut db = State::builder()
+            .with_bal(bal)
+            .with_database(db)
+            .with_bundle_update()
+            .with_bal_builder()
+            .without_state_clear()
+            .build();
+        db.bal_index = 0;
+        db.bal_builder = Some(revm::state::bal::Bal::new());
+        Self { strategy_factory, db }
+    }
 }
 
 impl<F, DB> Executor<DB> for BasicBlockExecutor<F, DB>
@@ -589,7 +605,7 @@ where
         block: &RecoveredBlock<<Self::Primitives as NodePrimitives>::Block>,
     ) -> Result<BlockExecutionResult<<Self::Primitives as NodePrimitives>::Receipt>, Self::Error>
     {
-        let result = self
+        let mut result = self
             .strategy_factory
             .executor_for_block(&mut self.db, block)
             .map_err(BlockExecutionError::other)?
@@ -597,6 +613,7 @@ where
 
         self.db.merge_transitions(BundleRetention::Reverts);
 
+        result.bal = self.db.bal_builder.take();
         Ok(result)
     }
 

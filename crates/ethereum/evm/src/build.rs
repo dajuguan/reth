@@ -49,7 +49,7 @@ where
             parent,
             transactions,
             output:
-                BlockExecutionResult { receipts, requests, gas_used, blob_gas_used, block_access_list },
+                BlockExecutionResult { receipts, requests, gas_used, blob_gas_used, block_access_list , bal},
             state_root,
             ..
         } = input;

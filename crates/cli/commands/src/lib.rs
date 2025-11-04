@@ -25,6 +25,7 @@ pub mod p2p;
 pub mod prune;
 pub mod re_execute;
 pub mod stage;
+pub mod dump;
 #[cfg(feature = "arbitrary")]
 pub mod test_vectors;
 
