@@ -110,7 +110,7 @@ impl<C: ChainSpecParser<ChainSpec: EthChainSpec + Hardforks + EthereumHardforks>
             let block = provider_factory
                 .recovered_block(block.into(), TransactionVariant::NoHash)?
                 .unwrap();
-            let block = block.into_block();
+            // let block = block.into_block();
             blocks.push(block);
         }
 
