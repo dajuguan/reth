@@ -9,10 +9,12 @@ use reth_chainspec::{ChainSpec, EthChainSpec, Hardforks};
 use reth_cli::chainspec::ChainSpecParser;
 use reth_cli_commands::{
     common::{CliComponentsBuilder, CliNodeTypes, HeaderMut},
-    config_cmd, db, download, dump_genesis, export_era, import, import_era, init_cmd, init_state,
+    config_cmd, db, download, dump, dump_genesis, export_era, import, import_era, init_cmd,
+    init_state,
     launcher::FnLauncher,
     node::{self, NoArgs},
-    p2p, prune, re_execute, stage,
+    p2p, prune, re_execute,
+    stage::{self},
 };
 use reth_cli_runner::CliRunner;
 use reth_db::DatabaseEnv;
@@ -315,6 +317,9 @@ pub enum Commands<
     /// Extension subcommands provided by consumers.
     #[command(flatten)]
     Ext(SubCmd),
+    /// Dump blocks.
+    #[command(name = "dump")]
+    Dump(dump::DumpCommand<C>),
 }
 
 /// A no-op subcommand type for when no extension subcommands are needed.
@@ -352,6 +357,7 @@ impl<C: ChainSpecParser, Ext: clap::Args + fmt::Debug, SubCmd: Subcommand + fmt:
             Self::Config(_) => None,
             Self::Prune(cmd) => cmd.chain_spec(),
             Self::ReExecute(cmd) => cmd.chain_spec(),
+            Self::Dump(cmd) => cmd.chain_spec(),
             Self::Ext(_) => None,
         }
     }

@@ -193,6 +193,7 @@ where
             ommers: &block.body().ommers,
             withdrawals: block.body().withdrawals.as_ref().map(Cow::Borrowed),
             extra_data: block.header().extra_data.clone(),
+            tx_count_hint: None,
         })
     }
 
@@ -207,6 +208,7 @@ where
             ommers: &[],
             withdrawals: attributes.withdrawals.map(Cow::Owned),
             extra_data: attributes.extra_data,
+            tx_count_hint: None,
         })
     }
 }
@@ -286,6 +288,7 @@ where
             ommers: &[],
             withdrawals: payload.payload.withdrawals().map(|w| Cow::Owned(w.clone().into())),
             extra_data: payload.payload.as_v1().extra_data.clone(),
+            tx_count_hint: None,
         })
     }
 

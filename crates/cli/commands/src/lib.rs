@@ -12,6 +12,7 @@ pub mod common;
 pub mod config_cmd;
 pub mod db;
 pub mod download;
+pub mod dump;
 pub mod dump_genesis;
 pub mod export_era;
 pub mod import;

@@ -178,6 +178,8 @@ where
         #[cfg(feature = "dev")]
         Commands::TestVectors(command) => runner.run_until_ctrl_c(command.execute()),
         Commands::ReExecute(command) => runner.run_until_ctrl_c(command.execute::<N>(components)),
+        Commands::Dump(command) => runner.run_until_ctrl_c(command.execute::<N>(components)),
+
         Commands::Ext(command) => command.execute(runner),
     }
 }
